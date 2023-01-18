@@ -4,7 +4,7 @@ pub enum LapError {
     NotSolveable,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct LapSolution {
     pub row: Vec<usize>,
     pub col: Vec<usize>,
@@ -18,6 +18,8 @@ pub struct LapJV<'a> {
     free_rows: Vec<usize>,
     dimension: usize,
     values: Vec<f64>,
+    unique: Vec<bool>,
+    in_row_not_set: Vec<bool>,
 }
 
 impl<'a> LapJV<'a> {
@@ -28,6 +30,8 @@ impl<'a> LapJV<'a> {
         let free_rows = Vec::with_capacity(dimension);
         let values = Vec::with_capacity(dimension);
 
+        let unique = vec![true; dimension];
+        let in_row_not_set = vec![true; dimension];
         Self {
             costs,
             col_sol,
@@ -35,6 +39,8 @@ impl<'a> LapJV<'a> {
             free_rows,
             dimension,
             values,
+            unique,
+            in_row_not_set,
         }
     }
 
@@ -60,8 +66,8 @@ impl<'a> LapJV<'a> {
         }
 
         let mut cost = 0.0;
-        for i in (0..self.dimension).rev() {
-            let j = self.row_sol[i];
+        for i in 0..self.dimension {
+            let j = self.col_sol[i];
             cost += self.cost(i, j)
         }
 
@@ -84,7 +90,7 @@ impl<'a> LapJV<'a> {
     }
 
     fn column_reduction(&mut self) {
-        for row in self.costs {
+        for row in self.costs.iter() {
             // find the lowest value in the column
             let (min_index, min_val) = row.iter().enumerate().skip(1).fold(
                 (0, row[0]),
@@ -138,13 +144,15 @@ impl<'a> LapJV<'a> {
 
     fn augmenting_row_reduction(&mut self) {
         let mut current = 0;
+        let mut rr_cnt = 0;
         let mut new_free_rows = 0;
 
         let num_free_rows = self.free_rows.len();
 
         while current < num_free_rows {
+            rr_cnt += 1;
             let free_i = self.free_rows[current];
-
+            current += 1;
             // find the first and second minimum reduces cost ofer columns
             let mut u_mins = UMins::find(&self.costs[free_i], &self.values);
 
@@ -169,8 +177,8 @@ impl<'a> LapJV<'a> {
                 if u_min_lowered {
                     // put in current k, and go back to that k.
                     // continue augmenting path i - j1 with i0.
-                    self.free_rows[current] = i0;
                     current -= 1;
+                    self.free_rows[current] = i0;
                 } else {
                     // no further augmenting reduction possible.
                     // store i0 in list of free rows for next phase
@@ -181,8 +189,6 @@ impl<'a> LapJV<'a> {
 
             self.row_sol[free_i] = u_mins.j1;
             self.col_sol[u_mins.j1] = free_i;
-
-            current += 1;
         }
 
         self.free_rows.truncate(new_free_rows);
@@ -208,7 +214,7 @@ impl<'a> LapJV<'a> {
         Ok(())
     }
 
-    // single iteration of Dijkstra's shortest path with modifications explained in source paper
+    // single iteration od Dijkstra's shortest path with modifications explained in source paper
     // returns the index of the closest free column
     fn shortest_path(&mut self, start_index: usize, pred: &mut [usize]) -> usize {
         let mut column_list = self.new_vec(); // list of columns to be scanned
@@ -248,6 +254,7 @@ impl<'a> LapJV<'a> {
         let min_d = cost_distance[column_list[lo]];
         for &j in column_list.iter().take(n_ready).rev() {
             // update column prices.
+
             self.values[j] += cost_distance[j] - min_d;
         }
         final_j.unwrap()
@@ -312,7 +319,6 @@ fn find_dense(dim: usize, lo: usize, cost_distance: &[f64], column_list: &mut [u
             }
             column_list[k] = column_list[hi];
             column_list[hi] = j;
-            // todo validate that this isn't supposed to modify loop bounds
             hi += 1;
         }
     }
@@ -365,7 +371,7 @@ impl UMins {
 
 #[cfg(test)]
 mod tests {
-    use crate::{LapJV, UMins};
+    use crate::{LapJV, LapSolution, UMins};
 
     #[test]
     fn solve_basic() {
@@ -392,4 +398,76 @@ mod tests {
         };
         assert_eq!(umins, correct_umins);
     }
+
+    // solved in column reduction
+    #[test]
+    fn solved_column_reduction() {
+        let matrix: Vec<Vec<f64>> = vec![
+            vec![1000.0, 4.0, 1.0],
+            vec![1.0, 1000.0, 3.0],
+            vec![5.0, 1.0, 1000.0],
+        ];
+
+        let result = LapSolution {
+            row: vec![1, 2, 0],
+            col: vec![2, 0, 1],
+            cost: 3.0,
+        };
+
+        assert_eq!(LapJV::new(&matrix).solve().unwrap(), result);
+    }
+
+    // Solved in augmenting row reduction.
+    #[test]
+    fn solved_augmenting_row_reduction() {
+        let matrix: Vec<Vec<f64>> = vec![
+            vec![5.0, 1000.0, 3.0],
+            vec![1000.0, 2.0, 3.0],
+            vec![1.0, 5.0, 1000.0],
+        ];
+
+        let result = LapSolution {
+            row: vec![2, 1, 0],
+            col: vec![2, 1, 0],
+            cost: 6.0,
+        };
+        assert_eq!(LapJV::new(&matrix).solve().unwrap(), result);
+    }
+    #[test]
+    // Needs augmentating row reduction - only a single row previously assigned.
+    fn needs_augmenting_row_reduction() {
+        let matrix: Vec<Vec<f64>> = vec![
+            vec![1000.0, 1001.0, 1000.0],
+            vec![1000.0, 1000.0, 1001.0],
+            vec![1.0, 2.0, 3.0],
+        ];
+
+        let result = LapSolution {
+            row: vec![2, 1, 0],
+            col: vec![2, 1, 0],
+            cost: 2001.0,
+        };
+
+        assert_eq!(LapJV::new(&matrix).solve().unwrap(), result);
+    }
+    // Triggers the trackmate bug
+    // Solution is ambiguous, [1, 0, 2] gives the same cost, depends on whether
+    // in column reduction columns are iterated over from largest to smallest or
+    // the other way around.
+    #[test]
+    fn trackmate_bug() {
+        let matrix = vec![
+            vec![10.0, 10.0, 13.0],
+            vec![4.0, 8.0, 8.0],
+            vec![8.0, 5.0, 8.0],
+        ];
+
+        let result = LapSolution {
+            row: vec![1, 2, 0],
+            col: vec![2, 0, 1],
+            cost: 13.0 + 4.0 + 5.0,
+        };
+        assert_eq!(LapJV::new(&matrix).solve().unwrap(), result);
+    }
+    // This triggered error in augmentation.
 }

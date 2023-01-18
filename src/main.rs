@@ -3,60 +3,50 @@
 use std::{fs, time::Instant};
 
 use lap_jv::LapJV;
-use rand::Rng;
+
 fn main() {
-    let size = 5000;
-    my_bench(size);
-    // lib_bench(size);
+    let matrix = vec![
+        vec![10.0, 10.0, 13.0],
+        vec![4.0, 8.0, 8.0],
+        vec![8.0, 5.0, 8.0],
+    ];
+    let result = LapJV::new(&matrix).solve().unwrap();
+
+    println!("Result: {:?}", result);
+}
+/*
+fn bench() {
+    let size = 1000;
+    let mut rng = rand::thread_rng();
+    let mut matrix = Vec::with_capacity(size);
+    for _ in 0..size {
+        let mut row = Vec::with_capacity(size);
+        for _ in 0..size {
+            row.push(rng.gen::<f64>() * size as f64);
+        }
+        matrix.push(row);
+    }
+
+    my_bench(size, matrix.clone());
+    lib_bench(size, matrix.clone());
 }
 
-fn my_bench(size: usize) {
-    let mut rng = rand::thread_rng();
-
-    /*  let mut matrix = Vec::with_capacity(size);
-     for _ in 0..size {
-         let mut row = Vec::with_capacity(size);
-         for _ in 0..size {
-             row.push(rng.gen::<f64>() * size as f64);
-         }
-         matrix.push(row);
-     }
-
-    let json = serde_json::to_string(&matrix).unwrap();
-       println!("{json}");
-    */
-
-    let matrix = std::fs::read("./val.json").unwrap();
-
-    let matrix: Vec<Vec<f64>> = serde_json::from_slice(&matrix).unwrap();
-
+fn my_bench(size: usize, matrix: Vec<Vec<f64>>) {
     let start = Instant::now();
     let result = LapJV::new(&matrix).solve().unwrap();
     // let result = lap(matrix);
     let elapsed = start.elapsed();
-    println!("Calculated in {elapsed:#?}");
-    println!("Total cost: {}", result.cost);
+    println!("Calculated in {elapsed:#?} - Total Cost: {}", result.cost);
 }
 
-fn lib_bench(size: usize) {
-    let mut rng = rand::thread_rng();
+fn lib_bench(size: usize, matrix: Vec<Vec<f64>>) {
+    let vec = matrix.into_iter().flatten().collect::<Vec<f64>>();
 
-    /*
-        let mut vec = Vec::with_capacity(size);
-        for _ in 0..size * size {
-            vec.push(rng.gen::<f64>() * size as f64);
-        }
-    */
-    let matrix = std::fs::read("./val.json").unwrap();
-
-    let matrix: Vec<Vec<f64>> = serde_json::from_slice(&matrix).unwrap();
-    let len = matrix.len();
-    let matrix = matrix.into_iter().flatten().collect();
-
-    let matrix = lapjv::Matrix::from_shape_vec((len, len), matrix).unwrap();
+    let matrix = lapjv::Matrix::from_shape_vec((size, size), vec).unwrap();
     let start = Instant::now();
     let res = lapjv::lapjv(&matrix).unwrap();
 
+    let elapsed = start.elapsed();
     let mut costs = 0.0;
     for i in 0..size {
         let row = res.0[i];
@@ -66,6 +56,8 @@ fn lib_bench(size: usize) {
         costs += cost;
     }
 
-    let elapsed = start.elapsed();
-    println!("Calculated in {elapsed:#?} \n total cost: {costs}");
+    println!("Calculated in {elapsed:#?} - Total Cost: {costs}");
 }
+
+
+*/

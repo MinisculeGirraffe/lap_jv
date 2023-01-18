@@ -4,7 +4,7 @@ use rand::Rng;
 pub fn criterion_benchmark(c: &mut Criterion) {
     let mut rng = rand::thread_rng();
 
-    let sizes = vec![10, 20, 50, 100, 1_000, 5_000];
+    let sizes = vec![10, 20, 50, 100, 1_000];
     for size in sizes {
         c.bench_function(&format!("Problem Size: {size}"), |b| {
             b.iter(|| {
